@@ -1,0 +1,34 @@
+version: '3.8'
+
+# Adaptive Card Data Pipeline - 서버 배포용
+# PostgreSQL은 호스트 시스템에서 실행, Redis는 서버에 설치됨
+
+services:
+  adaptive-card-pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile.full
+      platforms:
+        - linux/amd64
+    container_name: adaptive-card-pipeline-app
+    ports:
+      - "8000:8000"  # 애플리케이션 포트
+    environment:
+      - APP_ENV=server
+      - DB_HOST=host.docker.internal  # Docker에서 호스트 접근
+      - DB_PORT=5432
+      - DB_NAME=adaptive_card_db
+      - DB_USER=dongwon
+      - DB_PASSWORD=ehdwon415!
+      - REDIS_URL=redis://redis:6379/0  # 서버의 Redis 사용
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Linux에서 호스트 접근
+    restart: unless-stopped
+    volumes:
+      - .:/app  # 프로젝트 폴더를 컨테이너에 마운트
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import redis, psycopg2; redis.Redis(host='redis', port=6379).ping(); psycopg2.connect(host='host.docker.internal', port=5432, database='adaptive_card_db', user='dongwon', password='ehdwon415!')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s

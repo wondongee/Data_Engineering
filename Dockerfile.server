@@ -1,0 +1,91 @@
+# Linux/AMD64 서버용 Docker 이미지
+# Oracle thick client 포함, 오프라인 환경 배포용
+
+FROM --platform=linux/amd64 python:3.11-slim
+
+# 시스템 패키지 업데이트 및 필수 패키지 설치
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    libffi-dev \
+    libssl-dev \
+    libbz2-dev \
+    libreadline-dev \
+    libsqlite3-dev \
+    libncurses5-dev \
+    libncursesw5-dev \
+    xz-utils \
+    tk-dev \
+    libxml2-dev \
+    libxmlsec1-dev \
+    liblzma-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libfreetype6-dev \
+    liblcms2-dev \
+    libwebp-dev \
+    tcl8.6-dev \
+    tk8.6-dev \
+    python3-tk \
+    libharfbuzz-dev \
+    libfribidi-dev \
+    libxcb1-dev \
+    libpq-dev \
+    libaio-dev \
+    wget \
+    curl \
+    git \
+    unzip \
+    supervisor \
+    && rm -rf /var/lib/apt/lists/*
+
+# Oracle Instant Client 설치 (AMD64)
+WORKDIR /opt/oracle
+RUN wget https://download.oracle.com/otn_software/linux/instantclient/1923000/instantclient-basic-linux.x64-19.23.0.0.0dbru.zip \
+    && wget https://download.oracle.com/otn_software/linux/instantclient/1923000/instantclient-sdk-linux.x64-19.23.0.0.0dbru.zip \
+    && unzip -o instantclient-basic-linux.x64-19.23.0.0.0dbru.zip \
+    && unzip -o instantclient-sdk-linux.x64-19.23.0.0.0dbru.zip \
+    && rm -f *.zip \
+    && cd instantclient_19_23 \
+    && echo /opt/oracle/instantclient_19_23 > /etc/ld.so.conf.d/oracle-instantclient.conf \
+    && ldconfig
+
+# Oracle 환경변수 설정
+ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_19_23:$LD_LIBRARY_PATH
+ENV ORACLE_HOME=/opt/oracle/instantclient_19_23
+ENV PATH=/opt/oracle/instantclient_19_23:$PATH
+
+# 작업 디렉토리 설정
+WORKDIR /app
+
+# Python 환경 변수 설정
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+ENV PYTHONPATH=/app
+
+# Python 패키지 설치
+COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel
+RUN pip install -r requirements.txt
+
+# 애플리케이션 코드 복사
+COPY . .
+
+# 스크립트 실행 권한 부여
+RUN chmod +x *.sh
+
+# 출력 디렉토리 생성
+RUN mkdir -p /app/output
+
+# 포트 노출
+EXPOSE 8000
+
+# 헬스체크 추가
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD python -c "import sys; sys.exit(0)"
+
+# 기본 명령어 설정 (start_scalable.sh 실행)
+CMD ["./start_scalable.sh"]
